@@ -323,12 +323,11 @@ def main():
         #MPS1.Gamma_mat[0] = temp
         
         DENS1 = create_superket(MPS1, newchi)
-    #DENS1.locsize = np.ones(DENS1.N+1, dtype=int) * newchi
     
     #creating time evolution object
     TimeEvol_obj1 = init_TimeOp()
     
-    time_evolution(TimeEvol_obj1, DENS1, steps, track_Sz)
+    time_evolution(TimeEvol_obj1, DENS1, steps, track_n)
     
     plot_results(DENS1)
     

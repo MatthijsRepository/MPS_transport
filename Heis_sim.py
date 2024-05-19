@@ -12,7 +12,7 @@ import time
 ### These imports are done in the 'main()' function to avoid multiprocessing-related errors
 
 #from MPS_TimeOp_no_locsize import MPS, Time_Operator
-from MPS_TimeOp import MPS, Time_Operator
+#from MPS_TimeOp import MPS, Time_Operator
 
 #from MPS_initializations import *
 
@@ -20,6 +20,7 @@ from MPS_TimeOp import MPS, Time_Operator
 ##############################################################################################
 
 def load_state(folder, name, new_ID):
+    from MPS_TimeOp import MPS
     """ loads a pickled state from folder 'folder' with name 'name' - note: name must include .pkl """
     filename = folder + name
     with open(filename, 'rb') as file:  
@@ -34,6 +35,7 @@ def load_state(folder, name, new_ID):
     return loaded_state
     
 def create_superket(State, newchi):
+    from MPS_TimeOp import MPS
     """ create MPS of the density matrix of a given MPS """
     gammas, lambdas, locsize = State.construct_vidal_supermatrices(newchi)
     
@@ -53,10 +55,10 @@ def global_apply_twosite(TimeOp, normalize, Lambda_mat, Gamma_mat, locsize, d, c
         theta = np.tensordot(np.diag(Lambda_mat[0,:locsize[0]]), Gamma_mat[0,:,:locsize[0],:locsize[1]], axes=(1,1)) #(chi, d, chi)
         theta = np.tensordot(theta,np.diag(Lambda_mat[1,:locsize[1]]),axes=(2,0)) #(chi, d, chi) 
         theta = np.tensordot(theta, Gamma_mat[1,:,:locsize[1],:locsize[2]],axes=(2,1)) #(chi,d,d,chi)
-        theta = np.tensordot(theta,np.diag(Lambda_mat[2,:locsize[2]]), axes=(3,0)) #(chi, d, d, chi)        
+        theta = np.tensordot(theta,np.diag(Lambda_mat[2,:locsize[2]]), axes=(3,0)) #(chi, d, d, chi)   
         #operator is applied, tensor is reshaped
         TimeOp = np.reshape(TimeOp, (d,d,d,d))
-        theta_prime = np.tensordot(theta, TimeOp,axes=([1,2],[2,3])) #(chi,chi,d,d)        
+        theta_prime = np.tensordot(theta, TimeOp,axes=([1,2],[2,3])) #(chi,chi,d,d)     
         theta_prime = np.reshape(np.transpose(theta_prime, (2,0,3,1)),(d*locsize[0], d*locsize[2])) #first to (d, chi, d, chi), then (d*chi, d*chi)
         X, Y, Z = np.linalg.svd(theta_prime); Z = Z.T
 
@@ -80,23 +82,23 @@ def global_apply_twosite(TimeOp, normalize, Lambda_mat, Gamma_mat, locsize, d, c
         Gamma_mat[1,:,:locsize[1],:locsize[2]] = np.tensordot(Z[:,:locsize[1],:locsize[2]], np.diag(inv_lambdas), axes=(2,0)) #(d, chi, chi)
         return (Lambda_mat[1], Gamma_mat)
         
-def TEBD_Heis_multi(State, TimeOp, Diss_arr, normalize, diss_bool):
+def TEBD_Heis_multi(State, TimeOp, diss_index, diss_TimeOp, normalize, diss_bool):
     """ Performing the TEBD steps in parallel using python's 'pool' method """
     for j in [0,1]:
-        new_matrices = p.starmap(global_apply_twosite, [(TimeOp[i], normalize, State.Lambda_mat[i:i+3], State.Gamma_mat[i:i+2], State.locsize[i:i+3], State.d, State.chi) for i in range(j, State.N-1, 2)])
+        new_matrices = p.starmap(global_apply_twosite, [(TimeOp, normalize, State.Lambda_mat[i:i+3], State.Gamma_mat[i:i+2], State.locsize[i:i+3], State.d, State.chi) for i in range(j, State.N-1, 2)])
         for i in range(j, State.N-1, 2):
             State.Lambda_mat[i+1] = new_matrices[int(i//2)][0]
-            State.Gamma_mat[i, :, :State.locsize[i],:State.locsize[i+1]] = new_matrices[int(i//2)][1]
-            State.Gamma_mat[i+1, :, :State.locsize[i+1],:State.locsize[i+2]] = new_matrices[int(i//2)][2]  
+            State.Gamma_mat[i:i+2] = new_matrices[int(i//2)][1]
         
     if diss_bool:
-            for i in range(len(Diss_arr["index"])):
-                State.apply_singlesite(Diss_arr["TimeOp"][i], Diss_arr["index"][i])
+        for i in range(len(diss_index)):
+            State.apply_singlesite(diss_TimeOp[i], diss_index[i])
     pass 
 
 ##############################################################################################
 
 def init_TimeOp():
+    from MPS_TimeOp import Time_Operator
     """ Initialize time operator for the XXZ chain """
     TimeEvol_obj = Time_Operator(N, d, diss_bool, True)
     
@@ -146,8 +148,8 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
             State.spin_current_in[-1] *= 1/State.trace[t]
             State.spin_current_out[-1] *= 1/State.trace[t]
         
-        State.TEBD_Heis(TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
-        #TEBD_multi(State, TimeOp, Diss_arr, normalize, diss_bool)
+        #State.TEBD_Heis(TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
+        TEBD_Heis_multi(State, TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
     pass
 
 
@@ -204,7 +206,7 @@ newchi=45   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=1000
+steps=300
 dt = 0.02
 
 normalize = True
@@ -233,7 +235,6 @@ spin_current_op = 1j* ( np.kron( np.kron(Sp, np.eye(d)) , np.kron(Sm, np.eye(d))
 
 #### NORM_state initialization
 from MPS_initializations import create_maxmixed_normstate, calculate_thetas_singlesite, calculate_thetas_twosite
-
 NORM_state = create_maxmixed_normstate(N, d, newchi)
 NORM_state.singlesite_thetas = calculate_thetas_singlesite(NORM_state)
 NORM_state.twosite_thetas = calculate_thetas_twosite(NORM_state)
@@ -252,6 +253,8 @@ load_state_bool = False
 def main():
     #Import is done here instead of at the beginning of the code to avoid multiprocessing-related errors
     from MPS_initializations import initialize_halfstate, initialize_LU_RD
+    from MPS_TimeOp import MPS
+
         
     #load state or create a new one
     if load_state_bool:
@@ -283,7 +286,9 @@ def main():
 t0 = time.time()
 
 if __name__=="__main__":
+    p = Pool(processes=max_cores)
     main()
+    p.close()
 
 elapsed_time = time.time()-t0
 print(f"Elapsed simulation time: {elapsed_time}")

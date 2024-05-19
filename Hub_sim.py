@@ -251,7 +251,11 @@ s_SOC = 1
 s_coup = 1
 mu = 1
 polarization_is_up = True
-polarization_factor = 2
+
+if incl_SOC:
+    polarization_factor = 2
+else:
+    polarization_factor = 1
 
 mu_plus = np.sqrt(s_coup*(1+mu))
 mu_min = np.sqrt(s_coup*(1-mu))

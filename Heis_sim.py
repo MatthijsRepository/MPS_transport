@@ -141,13 +141,13 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
         if track_Sz:
             State.Sz_expvals[:,t], temp_trace = State.expval_chain(np.kron(Sz, np.eye(2)), NORM_state)
             State.Sz_expvals[:,t] *= 1/temp_trace
-        
+        """
         State.spin_current_in = np.append(State.spin_current_in, np.real( State.expval_twosite(spin_current_op, middle_site, NORM_state, normalize) ))
         State.spin_current_out = np.append(State.spin_current_out, np.real( State.expval_twosite(spin_current_op, middle_site+1, NORM_state, normalize) ))
         if State.is_density:
             State.spin_current_in[-1] *= 1/State.trace[t]
             State.spin_current_out[-1] *= 1/State.trace[t]
-        
+        """
         #State.TEBD_Heis(TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
         TEBD_Heis_multi(State, TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
     pass
@@ -179,7 +179,27 @@ def plot_results(State):
         plt.grid()
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
         plt.show()
+        
+        plt.plot(State.Sz_expvals[7,-500:], label="Site 7")
+        plt.plot(State.Sz_expvals[8,-500:], label="Site 8")
+        plt.plot(State.Sz_expvals[9,-500:], label="Site 9")
+        plt.plot(State.Sz_expvals[10,-500:], label="Site 10")
+        plt.plot(State.Sz_expvals[11,-500:], label="Site 11")
+        plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
+        plt.show()
+        
+        plt.plot(State.Sz_expvals[7,:], label="Site 7")
+        plt.plot(State.Sz_expvals[8,:], label="Site 8")
+        plt.plot(State.Sz_expvals[9,:], label="Site 9")
+        plt.plot(State.Sz_expvals[10,:], label="Site 10")
+        plt.plot(State.Sz_expvals[11,:], label="Site 11")
+        plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
+        plt.show()
+        
+        plt.plot(State.Sz_expvals[:,-1], linestyle="", label=".")
+        plt.show()
     
+    """
     plt.plot(State.spin_current_in, label="In")
     plt.plot(State.spin_current_out, label="Out")
     plt.plot( (State.spin_current_in + State.spin_current_out)/2, label="Average current")
@@ -188,6 +208,7 @@ def plot_results(State):
     plt.legend()
     plt.grid()
     plt.show()
+    """
     pass
     
 
@@ -195,18 +216,18 @@ def plot_results(State):
 
 ##############################################################################################
 
-max_cores = 4
+max_cores = 5
 
 t0 = time.time()
 #### Simulation variables
-N=8
+N=18
 d=2
 chi=10      #MPS truncation parameter
-newchi=45   #DENS truncation parameter
+newchi=65   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=300
+steps=1450
 dt = 0.02
 
 normalize = True
@@ -217,7 +238,7 @@ track_Sz = True
 #### Hamiltonian and Lindblad constants
 h=0
 JXY=1#1
-JZ=1
+JZ=0.5
 
 s_coup=1
 s_coup = np.sqrt(s_coup)  

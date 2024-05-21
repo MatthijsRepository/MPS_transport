@@ -167,29 +167,29 @@ class MPS:
         """ TEBD algorithm for the spin-orbit coupling terms """
         for i in range(0, 1):
             #Swap sites i+2 and i+3 with sites i+4 and i+5
-            self.swap(i+3)
-            self.swap(i+4)
-            self.swap(i+2)
-            self.swap(i+3)
+            self.swap(i+3, normalize)
+            self.swap(i+4, normalize)
+            self.swap(i+2, normalize)
+            self.swap(i+3, normalize)
             
             #"""
             for j in (i, i+4):
                 if j>=self.N-3:
                     break #if the physical system has odd length this prevents the code from exceeding N
-                self.swap(j)
+                self.swap(j, normalize)
                 self.apply_twosite(TimeOp_SOC[int(j/4),0], j+1, normalize) #j up & j+2 up
-                self.swap(j+2)
+                self.swap(j+2, normalize)
                 self.apply_twosite(TimeOp_SOC[int(j/4),1], j+1, normalize) #j up & j+2 down
-                self.swap(j)
+                self.swap(j, normalize)
                 self.apply_twosite(TimeOp_SOC[int(j/4),3], j+1, normalize) #j down & j+2 down
-                self.swap(j+2)
+                self.swap(j+2, normalize)
                 self.apply_twosite(TimeOp_SOC[int(j/4),2], j+1, normalize) #j down & j+2 up
             #"""
             #Swap sites i+2 and i+3 with sites i+4 and i+5 back to their original positions
-            self.swap(i+3)
-            self.swap(i+4)
-            self.swap(i+2)
-            self.swap(i+3)
+            self.swap(i+3, normalize)
+            self.swap(i+4, normalize)
+            self.swap(i+2, normalize)
+            self.swap(i+3, normalize)
         pass
             
     def TEBD_Hub(self, include_SOC, TimeOp_Coul, TimeOp_hop, TimeOp_SOC, diss_index, diss_TimeOp, normalize, diss_bool):
@@ -201,13 +201,13 @@ class MPS:
         for i in (0,2):
             for j in range(i, self.N-3, 4):
                 # Apply swap (2,3) -> (3,2)
-                self.swap(j+1)
+                self.swap(j+1, normalize)
                 
                 self.apply_twosite(TimeOp_hop, j, normalize)
                 self.apply_twosite(TimeOp_hop, j+2, normalize)
                 
                 # Apply swap (3,2) -> (2,3)
-                self.swap(j+1)
+                self.swap(j+1, normalize)
         
         #Spin-Orbit Coupling terms
         if include_SOC:

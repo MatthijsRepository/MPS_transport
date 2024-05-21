@@ -232,12 +232,12 @@ newchi=45   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=300
+steps=800
 dt = 0.02
 
 normalize = True
 use_CN = False #choose if you want to use Crank-Nicolson approximation
-diss_bool = True
+diss_bool = False
 track_n = True
 
 incl_SOC = False

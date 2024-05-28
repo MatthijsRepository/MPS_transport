@@ -31,8 +31,8 @@ class MPS:
         self.spin_current_in = np.array([])
         self.spin_current_out = np.array([])
         
-        self.spin_current_in_2 = np.array([])       #Used for the spin-down channel in the Hubbard model
-        self.spin_current_out_2 = np.array([])      #Used for the spin-down channel in the Hubbard model
+        self.spin_current_in_down = np.array([])       #Used for the spin-down channel in the Hubbard model
+        self.spin_current_out_down = np.array([])      #Used for the spin-down channel in the Hubbard model
         return
         
     def __str__(self):
@@ -114,7 +114,7 @@ class MPS:
                 self.Gamma_mat[i+j+1, :, :self.locsize[i+j+1],:self.locsize[i+j+2]] = tmp_gamma 
             else:
                 #Here we must contract Lambda with V for the next SVD. The contraction runs over the correct index (the chi resulting from the previous SVD, not the one incorporated with d**(temp-j))
-                theta_prime = np.tensordot(np.diag(Y[:self.locsize[i+j+1]]), theta_prime, axes=(1,1))
+                theta = np.tensordot(np.diag(Y[:self.locsize[i+j+1]]), theta_prime, axes=(1,1))
         return
     
     def apply_singlesite(self, TimeOp, i):

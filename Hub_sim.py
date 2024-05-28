@@ -81,15 +81,41 @@ def global_apply_twosite(TimeOp, normalize, Lambda_mat, Gamma_mat, locsize, d, c
         inv_lambdas[np.nonzero(inv_lambdas)] = inv_lambdas[np.nonzero(inv_lambdas)]**(-1)
         Gamma_mat[1,:,:locsize[1],:locsize[2]] = np.tensordot(Z[:,:locsize[1],:locsize[2]], np.diag(inv_lambdas), axes=(2,0)) #(d, chi, chi)
         return (Lambda_mat[1], Gamma_mat)
-        
-def TEBD_Heis_multi(State, TimeOp, diss_index, diss_TimeOp, normalize, diss_bool):
+ 
+
+def global_apply_hopping(TimeOp_hopping, normalize, Lambda_mat, Gamma_mat, locsize, d, chi):
+    #Swap
+    Lambda_mat[2], Gamma_mat[1:3] = global_apply_twosite(swap_op, normalize, Lambda_mat[1:4], Gamma_mat[1:3], locsize[1:4], d, chi)
+    
+    #Apply gates
+    Lambda_mat[1], Gamma_mat[0:2] = global_apply_twosite(TimeOp_hopping, normalize, Lambda_mat[:3], Gamma_mat[:2], locsize[:3], d, chi)
+    Lambda_mat[3], Gamma_mat[2:4] = global_apply_twosite(TimeOp_hopping, normalize, Lambda_mat[2:5], Gamma_mat[2:4], locsize[2:5], d, chi)
+    
+    #Swap
+    Lambda_mat[2], Gamma_mat[1:3] = global_apply_twosite(swap_op, normalize, Lambda_mat[1:4], Gamma_mat[1:3], locsize[1:4], d, chi)
+    return (Lambda_mat[1:4], Gamma_mat)
+       
+def TEBD_Hub_multi(State, incl_SOC, TimeOp_Coul, TimeOp_hopping, TimeOp_SOC, diss_index, diss_TimeOp, normalize, diss_bool):
     """ Performing the TEBD steps in parallel using python's 'pool' method """
+    
+    #Coulomb interactions
     for j in [0,1]:
-        new_matrices = p.starmap(global_apply_twosite, [(TimeOp, normalize, State.Lambda_mat[i:i+3], State.Gamma_mat[i:i+2], State.locsize[i:i+3], State.d, State.chi) for i in range(j, State.N-1, 2)])
+        new_matrices = p.starmap(global_apply_twosite, [(TimeOp_Coul, normalize, State.Lambda_mat[i:i+3], State.Gamma_mat[i:i+2], State.locsize[i:i+3], State.d, State.chi) for i in range(j, State.N-1, 2)])
         for i in range(j, State.N-1, 2):
             State.Lambda_mat[i+1] = new_matrices[int(i//2)][0]
             State.Gamma_mat[i:i+2] = new_matrices[int(i//2)][1]
-        
+      
+    #Hopping interactions
+    for j in [0,2]:
+        new_matrices = p.starmap(global_apply_hopping, [(TimeOp_hopping, normalize, State.Lambda_mat[i:i+5], State.Gamma_mat[i:i+4], State.locsize[i:i+5], State.d, State.chi) for i in range(j, State.N-3, 4)])
+        for i in range(j, State.N-3, 4):
+            State.Lambda_mat[i+1:i+4] = new_matrices[int((i-j)//4)][0]
+            State.Gamma_mat[i:i+4] = new_matrices[int((i-j)//4)][1]
+            
+    if incl_SOC:
+        State.TEBD_SOC(TimeOp_SOC, normalize)
+            
+    
     if diss_bool:
         for i in range(len(diss_index)):
             State.apply_singlesite(diss_TimeOp[i], diss_index[i])
@@ -129,7 +155,7 @@ def init_TimeOp():
         for i in range(int(N/2)-2):
             for j in range(4):
                 TimeEvol_obj.TimeOp_SOC[i,j] = TimeEvol_obj.Create_TimeOp(TimeEvol_obj.Ham_SOC[i,j], dt, use_CN)
-    
+    else: TimeEvol_obj.TimeOp_SOC = None
     
     #Note, we must pass an imaginary time here, because the create_TimeOp function multiplies by -1j
     TimeEvol_obj.add_dissipative_term(0, np.array([np.sqrt(up_factor)*mu_min*Sp, np.sqrt(up_factor)*mu_plus*Sm]), 1j*dt, use_CN)
@@ -146,7 +172,10 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
         return
     print(f"Starting time evolution of {State}")
     
-    middle_site = int(np.round(State.N/2-1))
+    middle_site_up = int(np.round(State.N/2-2))
+    middle_site_down = int(np.round(State.N/2-1))
+    
+    cross_current = np.array([])
     
     if track_n:
         State.n_expvals = np.zeros((State.N, steps))
@@ -165,17 +194,43 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
             State.n_expvals[:,t], temp_trace = State.expval_chain(np.kron(num_op, np.eye(2)), NORM_state)
             State.n_expvals[:,t] *= 1/temp_trace
         
-        State.spin_current_in = np.append(State.spin_current_in, np.real( State.expval_twosite(spin_current_op, middle_site, NORM_state, normalize) ))
-        State.spin_current_out = np.append(State.spin_current_out, np.real( State.expval_twosite(spin_current_op, middle_site+1, NORM_state, normalize) ))
+        #In currents for the up and down channels, middle site
+        State.swap(middle_site_up-1, normalize)
+        State.spin_current_in = np.append(State.spin_current_in, np.real( State.expval_twosite(spin_current_op, middle_site_up-2, NORM_state, normalize) ))
+        State.spin_current_in_down = np.append(State.spin_current_in_down, np.real( State.expval_twosite(spin_current_op, middle_site_up, NORM_state, normalize) ))
+        State.swap(middle_site_up-1, normalize)
+        
+        #Out currents for the up and down channels
+        State.swap(middle_site_down, normalize)
+        State.spin_current_out = np.append(State.spin_current_out, np.real( State.expval_twosite(spin_current_op, middle_site_up, NORM_state, normalize) ))
+        State.spin_current_out_down = np.append(State.spin_current_out_down, np.real( State.expval_twosite(spin_current_op, middle_site_up+2, NORM_state, normalize) ))       
+        State.swap(middle_site_down, normalize)
+        
+        cross_current = np.append(cross_current, np.real( State.expval_twosite(spin_current_op, middle_site_down, NORM_state, normalize) ))
+        
+        
         if State.is_density:
             State.spin_current_in[-1] *= 1/State.trace[t]
             State.spin_current_out[-1] *= 1/State.trace[t]
+            State.spin_current_in_down[-1] *= 1/State.trace[t]
+            State.spin_current_out_down[-1] *= 1/State.trace[t]
         
-        State.TEBD_Hub(incl_SOC, TimeEvol_obj.TimeOp_Coul, TimeEvol_obj.TimeOp_hopping, None, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
-        
-        
-        #State.TEBD_Heis(TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
-        #TEBD_Heis_multi(State, TimeEvol_obj.TimeOp_XXZ, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
+        #State.TEBD_Hub(incl_SOC, TimeEvol_obj.TimeOp_Coul, TimeEvol_obj.TimeOp_hopping, TimeEvol_obj.TimeOp_SOC, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
+        TEBD_Hub_multi(State, incl_SOC, TimeEvol_obj.TimeOp_Coul, TimeEvol_obj.TimeOp_hopping, TimeEvol_obj.TimeOp_SOC, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
+    
+    plt.plot(cross_current)
+    plt.title("cross_current")
+    plt.grid()
+    plt.show()
+    
+    print("Cross current")
+    print(cross_current[-1])
+    
+    print("Avg current up")
+    print((State.spin_current_in[-1] + State.spin_current_out[-1])/2)
+    print("Avg current down")
+    print((State.spin_current_in_down[-1] + State.spin_current_out_down[-1])/2)
+    
     pass
 
 
@@ -209,6 +264,27 @@ def plot_results(State):
     plt.plot(State.spin_current_in, label="In")
     plt.plot(State.spin_current_out, label="Out")
     plt.plot( (State.spin_current_in + State.spin_current_out)/2, label="Average current")
+    plt.title("Current through 'up' channel")
+    plt.xlabel("Timesteps")
+    plt.ylabel("Current")
+    plt.legend()
+    plt.grid()
+    plt.show()
+    
+    plt.plot(State.spin_current_in[-100:], label="In")
+    plt.plot(State.spin_current_out[-100:], label="Out")
+    plt.plot( (State.spin_current_in[-100:] + State.spin_current_out[-100:])/2, label="Average current")
+    plt.title("Current through 'up' channel")
+    plt.xlabel("Timesteps")
+    plt.ylabel("Current")
+    plt.legend()
+    plt.grid()
+    plt.show()
+    
+    plt.plot(State.spin_current_in_down, label="In")
+    plt.plot(State.spin_current_out_down, label="Out")
+    plt.plot( (State.spin_current_in_down + State.spin_current_out_down)/2, label="Average current")
+    plt.title("Current through 'down' channel")
     plt.xlabel("Timesteps")
     plt.ylabel("Current")
     plt.legend()
@@ -228,17 +304,17 @@ t0 = time.time()
 N=8
 d=2
 chi=10      #MPS truncation parameter
-newchi=45   #DENS truncation parameter
+newchi=60   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=800
+steps=600
 dt = 0.02
 
 normalize = True
 use_CN = False #choose if you want to use Crank-Nicolson approximation
-diss_bool = False
-track_n = True
+diss_bool = True
+track_n = False
 
 incl_SOC = False
 
@@ -269,8 +345,8 @@ else:
    
     
 #### Helix constants
-R = 5
-pitch = 10
+R = 1
+pitch = 2
 dPhi = None
 N_per_cycle = N-1
 is_righthanded = True
@@ -285,6 +361,13 @@ Sz = np.array([[1,0],[0,-1]])
 
 #### JW-transformed number operator
 num_op = np.array([[1,0],[0,0]])
+
+#### Swap operator, used such that swaps can be performed using the global_apply_twosite function
+swap_op = np.zeros((d**4,d**4))
+for i in range(d**2):
+    for j in range(d**2):
+        swap_op[i*d**2 + j, j*d**2 +i] = 1
+
 
 #### Spin current operators for DENS objects
 #spin_current_op = -t_hopping*  1/2 * ( np.kron( np.kron(Sx, np.eye(d)) , np.kron(Sy, np.eye(d))) - np.kron( np.kron(Sy, np.eye(d)) , np.kron(Sx, np.eye(d))) )
@@ -343,9 +426,9 @@ def main():
 t0 = time.time()
 
 if __name__=="__main__":
-    #p = Pool(processes=max_cores)
+    p = Pool(processes=max_cores)
     main()
-    #p.close()
+    p.close()
 
 elapsed_time = time.time()-t0
 print(f"Elapsed simulation time: {elapsed_time}")

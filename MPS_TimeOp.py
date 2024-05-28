@@ -115,6 +115,7 @@ class MPS:
             else:
                 #Here we must contract Lambda with V for the next SVD. The contraction runs over the correct index (the chi resulting from the previous SVD, not the one incorporated with d**(temp-j))
                 theta = np.tensordot(np.diag(Y[:self.locsize[i+j+1]]), theta_prime, axes=(1,1))
+                theta = theta.transpose(0,2,1) #(chi, chi, d^x)
         return
     
     def apply_singlesite(self, TimeOp, i):

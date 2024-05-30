@@ -158,10 +158,10 @@ def init_TimeOp():
     else: TimeEvol_obj.TimeOp_SOC = None
     
     #Note, we must pass an imaginary time here, because the create_TimeOp function multiplies by -1j
-    TimeEvol_obj.add_dissipative_term(0, np.array([np.sqrt(up_factor)*mu_min*Sp, np.sqrt(up_factor)*mu_plus*Sm]), 1j*dt, use_CN)
-    TimeEvol_obj.add_dissipative_term(1, np.array([np.sqrt(down_factor)*mu_min*Sp, np.sqrt(down_factor)*mu_plus*Sm]), 1j*dt, use_CN)
-    TimeEvol_obj.add_dissipative_term(N-2, np.array([mu_plus*Sp, mu_min*Sm]), 1j*dt, use_CN)
-    TimeEvol_obj.add_dissipative_term(N-1, np.array([mu_plus*Sp, mu_min*Sm]), 1j*dt, use_CN)
+    TimeEvol_obj.add_dissipative_term(0, np.array([np.sqrt(up_factor)*mu_min*Sp, np.sqrt(up_factor)*mu_plus*Sm]), dt, use_CN)
+    TimeEvol_obj.add_dissipative_term(1, np.array([np.sqrt(down_factor)*mu_min*Sp, np.sqrt(down_factor)*mu_plus*Sm]), dt, use_CN)
+    TimeEvol_obj.add_dissipative_term(N-2, np.array([mu_plus*Sp, mu_min*Sm]), dt, use_CN)
+    TimeEvol_obj.add_dissipative_term(N-1, np.array([mu_plus*Sp, mu_min*Sm]), dt, use_CN)
     return TimeEvol_obj
 
 
@@ -325,7 +325,7 @@ newchi=60   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=700
+steps=400
 dt = 0.02
 
 

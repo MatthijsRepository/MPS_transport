@@ -111,8 +111,8 @@ def init_TimeOp():
     TimeEvol_obj.TimeOp_XXZ = TimeEvol_obj.Create_TimeOp(TimeEvol_obj.Ham_XXZ, dt, use_CN)
     
     #Note, we must pass an imaginary time here, because the create_TimeOp function multiplies by -1j
-    TimeEvol_obj.add_dissipative_term(0, np.sqrt(s_coup)*Sp, 1j*dt, use_CN)
-    TimeEvol_obj.add_dissipative_term(N-1, np.sqrt(s_coup)*Sm, 1j*dt, use_CN)
+    TimeEvol_obj.add_dissipative_term(0, np.sqrt(s_coup)*Sp, dt, use_CN)
+    TimeEvol_obj.add_dissipative_term(N-1, np.sqrt(s_coup)*Sm, dt, use_CN)
     return TimeEvol_obj
 
 

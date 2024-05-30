@@ -172,19 +172,16 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
         return
     print(f"Starting time evolution of {State}")
     
-    middle_site_up = int(np.round(State.N/2-2))
-    middle_site_down = int(np.round(State.N/2-1))
-    
-    cross_current = np.array([])
-    
     if track_n:
         State.n_expvals = np.zeros((State.N, steps))
     
+    t1 = time.time() #Time evolution start time
     for t in range(steps):
         #if (t%2000==0 and t>0 and save_state_bool):
         #    State.store()
-        if (t%20==0):
-            print(t)
+        if (t%20==0 and t>0):
+            #print(str(t) + " / " + str(steps) + " (" + str(np.round(t/steps*100, decimals=0)) + "% completed)")
+            print(str(t) + " / " + str(steps) + " (" + str(np.round(t/steps*100, decimals=0)) + "% completed), approx. " + str(np.round((steps/t - 1)*(time.time()-t1), decimals=0)) + "s left" )
             
         State.normalization = np.append(State.normalization, State.calculate_vidal_inner(State))
         if State.is_density:
@@ -195,18 +192,18 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
             State.n_expvals[:,t] *= 1/temp_trace
         
         #In currents for the up and down channels, middle site
-        State.swap(middle_site_up-1, normalize)
-        State.spin_current_in = np.append(State.spin_current_in, np.real( State.expval_twosite(spin_current_op, middle_site_up-2, NORM_state, normalize) ))
-        State.spin_current_in_down = np.append(State.spin_current_in_down, np.real( State.expval_twosite(spin_current_op, middle_site_up, NORM_state, normalize) ))
-        State.swap(middle_site_up-1, normalize)
+        State.swap(current_site_index-1, normalize)
+        State.spin_current_in = np.append(State.spin_current_in, np.real( State.expval_twosite(spin_current_op, current_site_index-2, NORM_state, normalize) ))
+        State.spin_current_in_down = np.append(State.spin_current_in_down, np.real( State.expval_twosite(spin_current_op, current_site_index, NORM_state, normalize) ))
+        State.swap(current_site_index-1, normalize)
         
         #Out currents for the up and down channels
-        State.swap(middle_site_down, normalize)
-        State.spin_current_out = np.append(State.spin_current_out, np.real( State.expval_twosite(spin_current_op, middle_site_up, NORM_state, normalize) ))
-        State.spin_current_out_down = np.append(State.spin_current_out_down, np.real( State.expval_twosite(spin_current_op, middle_site_up+2, NORM_state, normalize) ))       
-        State.swap(middle_site_down, normalize)
+        State.swap(current_site_index+1, normalize)
+        State.spin_current_out = np.append(State.spin_current_out, np.real( State.expval_twosite(spin_current_op, current_site_index, NORM_state, normalize) ))
+        State.spin_current_out_down = np.append(State.spin_current_out_down, np.real( State.expval_twosite(spin_current_op, current_site_index+2, NORM_state, normalize) ))       
+        State.swap(current_site_index+1, normalize)
         
-        cross_current = np.append(cross_current, np.real( State.expval_twosite(spin_current_op, middle_site_down, NORM_state, normalize) ))
+        State.cross_current = np.append(State.cross_current, np.real( State.expval_twosite(spin_current_op, current_site_index, NORM_state, normalize) ))
         
         
         if State.is_density:
@@ -214,23 +211,24 @@ def time_evolution(TimeEvol_obj, State, steps, track_Sz):
             State.spin_current_out[-1] *= 1/State.trace[t]
             State.spin_current_in_down[-1] *= 1/State.trace[t]
             State.spin_current_out_down[-1] *= 1/State.trace[t]
+            State.cross_current[-1] *= 1/State.trace[t]
         
         #State.TEBD_Hub(incl_SOC, TimeEvol_obj.TimeOp_Coul, TimeEvol_obj.TimeOp_hopping, TimeEvol_obj.TimeOp_SOC, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
         TEBD_Hub_multi(State, incl_SOC, TimeEvol_obj.TimeOp_Coul, TimeEvol_obj.TimeOp_hopping, TimeEvol_obj.TimeOp_SOC, TimeEvol_obj.diss_index, TimeEvol_obj.diss_TimeOp, normalize, diss_bool)
     
-    plt.plot(cross_current)
+    plt.plot(State.cross_current)
     plt.title("cross_current")
     plt.grid()
     plt.show()
     
-    print("Cross current")
-    print(cross_current[-1])
-    
-    print("Avg current up")
-    print((State.spin_current_in[-1] + State.spin_current_out[-1])/2)
-    print("Avg current down")
-    print((State.spin_current_in_down[-1] + State.spin_current_out_down[-1])/2)
-    
+    if steps>300:
+        print("Cross current")
+        print(np.average(State.cross_current[-100:]))
+        
+        print("Avg current up")
+        print(np.average(State.spin_current_in[-100:] + State.spin_current_out[-100:])/2)
+        print("Avg current down")
+        print(np.average(State.spin_current_in_down[-100:] + State.spin_current_out_down[-100:])/2)
     pass
 
 
@@ -260,6 +258,25 @@ def plot_results(State):
         plt.grid()
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
         plt.show()
+        
+    if plot_n_final:
+        if hasattr(State, 'n_expvals'):
+            occup = State.n_expvals[:,-1]
+        else:
+            occup, temp_trace = State.expval_chain(np.kron(num_op, np.eye(d)), NORM_state)
+            occup *= 1/temp_trace
+        even = np.arange(0, State.N, 2)
+        odd = np.arange(1, State.N, 2)
+        plt.plot(occup[even], linestyle="", marker=".", label="Even sites")
+        plt.plot(occup[odd], linestyle="", marker=".", label="Odd sites")
+        plt.xlabel("Physical sites")
+        plt.ylabel("<n>")
+        plt.legend()
+        plt.grid()
+        plt.show()
+        print("Approx. Linear coefficients of bulk density profile:")
+        print("Up: " + str((occup[State.N-4] - occup[2]) / (State.N-4)/2))
+        print("Down: " + str((occup[State.N-3] - occup[3]) / (State.N-4)/2))
     
     plt.plot(State.spin_current_in, label="In")
     plt.plot(State.spin_current_out, label="Out")
@@ -308,13 +325,18 @@ newchi=60   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=600
+steps=700
 dt = 0.02
+
+
+current_site_index = int(np.round(N/2))-2 #Site of which we will track the currents in and out of
+
 
 normalize = True
 use_CN = False #choose if you want to use Crank-Nicolson approximation
 diss_bool = True
 track_n = False
+plot_n_final = True
 
 incl_SOC = False
 
@@ -373,11 +395,8 @@ for i in range(d**2):
 #spin_current_op = -t_hopping*  1/2 * ( np.kron( np.kron(Sx, np.eye(d)) , np.kron(Sy, np.eye(d))) - np.kron( np.kron(Sy, np.eye(d)) , np.kron(Sx, np.eye(d))) )
 spin_current_op = -t_hopping * 1j* ( np.kron( np.kron(Sp, np.eye(d)) , np.kron(Sm, np.eye(d))) - np.kron( np.kron(Sm, np.eye(d)) , np.kron(Sp, np.eye(d))) )
 
-#### NORM_state initialization
-from MPS_initializations import create_maxmixed_normstate, calculate_thetas_singlesite, calculate_thetas_twosite
-NORM_state = create_maxmixed_normstate(N, d, newchi)
-NORM_state.singlesite_thetas = calculate_thetas_singlesite(NORM_state)
-NORM_state.twosite_thetas = calculate_thetas_twosite(NORM_state)
+#### NORM_state definition, is initialized in main() function due to multiprocessing reasons
+NORM_state = None
 
 #### Loading and saving states
 loadstate_folder = "data\\"
@@ -393,9 +412,14 @@ load_state_bool = False
 
 def main():
     #Import is done here instead of at the beginning of the code to avoid multiprocessing-related errors
-    from MPS_initializations import initialize_halfstate, initialize_LU_RD
     from MPS_TimeOp import MPS
-
+    from MPS_initializations import initialize_halfstate, initialize_LU_RD
+    from MPS_initializations import create_maxmixed_normstate, calculate_thetas_singlesite, calculate_thetas_twosite
+    
+    global NORM_state
+    NORM_state = create_maxmixed_normstate(N, d, newchi)
+    NORM_state.singlesite_thetas = calculate_thetas_singlesite(NORM_state)
+    NORM_state.twosite_thetas = calculate_thetas_twosite(NORM_state)
         
     #load state or create a new one
     if load_state_bool:
@@ -431,6 +455,7 @@ if __name__=="__main__":
     p.close()
 
 elapsed_time = time.time()-t0
+print()
 print(f"Elapsed simulation time: {elapsed_time}")
 
 

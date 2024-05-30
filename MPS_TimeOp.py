@@ -31,8 +31,10 @@ class MPS:
         self.spin_current_in = np.array([])
         self.spin_current_out = np.array([])
         
-        self.spin_current_in_down = np.array([])       #Used for the spin-down channel in the Hubbard model
-        self.spin_current_out_down = np.array([])      #Used for the spin-down channel in the Hubbard model
+        self.spin_current_in_down = np.array([])    #Used for the spin-down channel in the Hubbard model
+        self.spin_current_out_down = np.array([])   #Used for the spin-down channel in the Hubbard model
+        
+        self.cross_current = np.array([])                #Current between up and down channel at the middle site
         return
         
     def __str__(self):
@@ -344,6 +346,6 @@ class Time_Operator:
     def add_dissipative_term(self, site, Op, dt, use_CN):
         """ Construct dissipative term for a (or multiple) operator(s) 'Op', which act on site 'index' """
         self.diss_index = np.append(self.diss_index, site)
-        temp_TimeOp = self.Create_TimeOp(self.calc_diss_site(Op), dt, use_CN)
+        temp_TimeOp = self.Create_TimeOp(self.calc_diss_site(Op), 1j*dt, use_CN)
         self.diss_TimeOp.append(temp_TimeOp)
         return
